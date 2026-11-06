@@ -9,6 +9,9 @@ import com.ensa.notes.mappers.NoteMapper;
 import com.ensa.notes.models.HttpResponse;
 import com.ensa.notes.repositories.NoteRepository;
 import com.ensa.notes.services.NoteService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,8 +55,9 @@ public class NoteServiceImp implements NoteService  {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value ="notesList", key= "'all'")
     public HttpResponse<NoteResponse> getAllNotes() {
-        log.info("Getting all notes");
+        log.info("CACHE MISS -> Get all notes from H2");
 
         List <NoteResponse> responses = noteRepository
                 .findAll()
@@ -66,8 +70,9 @@ public class NoteServiceImp implements NoteService  {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "noteByCode", key = "#code")
     public HttpResponse<NoteResponse> getNoteByCode(UUID code) {
-        log.info("Getting note by code {}", code);
+        log.info(" Cache Missing  -> Getting note by code {} from Database", code);
 
         Note note = findNoteByCodeOrThrow(code);
         NoteResponse noteResponse = noteMapper.toResponse(note);
@@ -77,8 +82,9 @@ public class NoteServiceImp implements NoteService  {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "notesList", key = "'level_' + #level.name()")
     public HttpResponse<NoteResponse> getNoteByLevel(Level level) {
-        log.info("Getting note by level {}", level);
+        log.info("Cache Missing -> Getting note by level {} from database", level);
 
         List<NoteResponse> response = noteRepository.findByLevel(level)
                 .stream()
@@ -90,8 +96,9 @@ public class NoteServiceImp implements NoteService  {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "notesList", key = "'search_' + #keyword.toLowerCase()")
     public HttpResponse<NoteResponse> searchNotes(String keyword) {
-        log.info("Getting notes by keyword {}", keyword);
+        log.info("Cache missing Getting notes by keyword {} from database", keyword);
 
         List<NoteResponse> responses = noteRepository.findByTitleContainingIgnoreCaseOrContentContainingIgnoreCase(keyword, keyword)
                 .stream()
@@ -102,6 +109,7 @@ public class NoteServiceImp implements NoteService  {
     }
 
     @Override
+    @CacheEvict(value = "notesList", allEntries = true)
     public HttpResponse<NoteResponse> createNote(NoteRequest noteRequest) {
         log.info("Creating note whit title {}", noteRequest.getTitle());
 
@@ -113,6 +121,10 @@ public class NoteServiceImp implements NoteService  {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = "noteByCode", key = "#code"),
+            @CacheEvict(value = "notesList", allEntries = true)
+    })
     public HttpResponse<NoteResponse> updateNote(UUID code, NoteRequest noteRequest) {
         log.info("Updating note by code {}", code);
 
@@ -129,6 +141,10 @@ public class NoteServiceImp implements NoteService  {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = "noteByCode", key = "#code"),
+            @CacheEvict(value = "notesList", allEntries = true)
+    })
     public HttpResponse<NoteResponse> deleteNote(UUID code) {
         log.info("Deleting note by code {}", code);
 
