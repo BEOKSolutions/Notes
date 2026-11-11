@@ -2,10 +2,7 @@ package com.ensa.notes.dtos;
 
 import com.ensa.notes.enums.Level;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -16,6 +13,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter @Setter
 public class NoteResponse implements Serializable {
 
     @Serial

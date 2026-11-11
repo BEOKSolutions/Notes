@@ -1,5 +1,6 @@
 package com.ensa.notes.controllers;
 
+import com.ensa.notes.config.kafka.NoteProducer;
 import com.ensa.notes.dtos.NoteRequest;
 import com.ensa.notes.dtos.NoteResponse;
 import com.ensa.notes.enums.Level;
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class NoteController {
 
     private final NoteService noteService;
+    private final NoteProducer noteProducer;
 
     @GetMapping
     public ResponseEntity<HttpResponse<NoteResponse>> getAllNotes() {
@@ -46,6 +48,9 @@ public class NoteController {
             @RequestBody
             NoteRequest noteRequest)
     {
+
+        noteProducer.send(noteRequest);
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(noteService.createNote(noteRequest));
     }
