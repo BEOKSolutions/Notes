@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Note Microservice — Prototype Interactif & Glossaire Technique</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Pipeline node state animations */
+        .pipe-node {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .pipe-active {
+            border-color: #4f46e5 !important;
+            background-color: #eef2ff !important;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.18);
+            transform: translateY(-2px);
+        }
+        .pipe-hit {
+            border-color: #10b981 !important;
+            background-color: #ecfdf5 !important;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+        }
+        .pipe-warn {
+            border-color: #f59e0b !important;
+            background-color: #fffbeb !important;
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+        }
+        .pipe-error {
+            border-color: #ef4444 !important;
+            background-color: #fef2f2 !important;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+        }
+        .pipe-dim {
+            opacity: 0.45;
+            border-style: dashed;
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+            animation: fadeUp 0.25s ease-out forwards;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+
+    <!-- ==================== HEADER & NAVIGATION ==================== -->
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+            <!-- Brand -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-500/20">
+                    N
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 flex flex-wrap items-center gap-2">
+                        Note Microservice Explorer
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            Spring Boot 3 + Redis + H2 + Angular 22
+                        </span>
+                    </h1>
+                    <p class="text-xs text-slate-500">Prototype interactif de bout en bout &amp; glossaire pédagogique de votre architecture</p>
+                </div>
+            </div>
+
+            <!-- Main Navigation Tabs -->
+            <nav class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                <button onclick="switchTab('simulator')" id="tab-simulator" class="px-3.5 py-2 rounded-lg text-xs font-bold transition bg-white text-indigo-700 shadow-xs">
+                    🚀 Simulateur Live
+                </button>
+                <button onclick="switchTab('glossary')" id="tab-glossary" class="px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900">
+                    📚 Glossaire (<span id="glossaryCountBadge">18</span> termes)
+                </button>
+                <button onclick="switchTab('pitfalls')" id="tab-pitfalls" class="px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900">
+                    ⚠️ Pièges &amp; Fixes
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ==================== TAB 1: LIVE SIMULATOR ==================== -->
+    <main id="view-simulator" class="max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 flex-1 flex flex-col gap-5">
+
+        <!-- Infrastructure Status Bar (Redis ON/OFF + Quick Scenario Controls) -->
+        <section class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Redis Server Toggle -->
+                <div class="flex items-center gap-2.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                    <span id="redisDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <div class="text-xs">
+                        <span class="font-bold text-slate-800">Serveur Redis (:6379)</span>
+                        <span id="redisStatusLabel" class="mono text-[11px] text-emerald-700 ml-1.5 font-semibold">EN LIGNE</span>
+                    </div>
+                    <button onclick="toggleRedisServer()" id="redisToggleBtn" class="ml-2 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition">
+                        Couper Redis
+                    </button>
+                </div>
+
+                <!-- H2 Status Badge -->
+                <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                    <span class="font-semibold text-slate-700">H2 In-Memory</span>
+                    <span class="mono text-[11px] text-slate-500">jdbc:h2:mem:Db_notes</span>
+                </div>
+            </div>
+
+            <!-- Quick Error & Cache Tests -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="apiGetAllNotes()" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition">
+                    GET /api/notes
+                </button>
+                <button onclick="simulateValidationError()" class="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition">
+                    Tester 400 (@Valid)
+                </button>
+                <button onclick="simulateNotFoundError()" class="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition">
+                    Tester 404 (UUID inconnu)
+                </button>
+                <button onclick="flushRedisManual()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">
+                    Vider Cache Redis
+                </button>
+            </div>
+        </section>
+
+        <!-- Architecture Visual Pipeline (Interactive Flowchart) -->
+        <section class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div>
+                    <h2 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        Flux d'exécution du Microservice en Temps Réel
+                    </h2>
+                    <p class="text-xs text-slate-500">Cliquez sur n'importe quelle brique ci-dessous pour lire sa définition et son rôle exact</p>
+                </div>
+                <span id="pipelineSummaryBadge" class="text-xs mono font-semibold px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                    Prêt — Lancez une action ci-dessous
+                </span>
+            </div>
+
+            <!-- 6-Node Microservice Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                <!-- Node 1: Angular -->
+                <div id="node-angular" onclick="openQuickTerm('angular')" class="pipe-node cursor-pointer bg-slate-50 border-2 border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold mono px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">PORT 4200</span>
+                        <span class="text-xs">🅰️</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-900">Angular 22</h3>
+                    <p class="text-[11px] text-slate-500 mt-0.5 leading-snug"><span class="mono">HttpClient</span> + <span class="mono">Signals</span></p>
+                </div>
+
+                <!-- Node 2: Controller + CORS + @Valid -->
+                <div id="node-controller" onclick="openQuickTerm('controller')" class="pipe-node cursor-pointer bg-slate-50 border-2 border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold mono px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">PORT 8082</span>
+                        <span class="text-xs">🚪</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-900">NoteController</h3>
+                    <p class="text-[11px] text-slate-500 mt-0.5 leading-snug"><span class="mono">CorsConfig</span> &amp; <span class="mono">@Valid</span></p>
+                </div>
+
+                <!-- Node 3: Service + Cache Annotations -->
+                <div id="node-service" onclick="openQuickTerm('service')" class="pipe-node cursor-pointer bg-slate-50 border-2 border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold mono px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">@Service</span>
+                        <span class="text-xs">⚙️</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-900">NoteServiceImpl</h3>
+                    <p class="text-[11px] text-slate-500 mt-0.5 leading-snug"><span class="mono">@Cacheable</span> / <span class="mono">@CacheEvict</span></p>
+                </div>
+
+                <!-- Node 4: Redis Cache -->
+                <div id="node-redis" onclick="openQuickTerm('redis')" class="pipe-node cursor-pointer bg-slate-50 border-2 border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">TTL 60s</span>
+                        <span class="text-xs">⚡</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-900">Redis Cache</h3>
+                    <p id="node-redis-sub" class="text-[11px] text-slate-500 mt-0.5 leading-snug"><span class="mono">CacheManager</span> + Fallback</p>
+                </div>
+
+                <!-- Node 5: Repository + Mapper + H2 -->
+                <div id="node-h2" onclick="openQuickTerm('h2')" class="pipe-node cursor-pointer bg-slate-50 border-2 border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">JPA / H2</span>
+                        <span class="text-xs">🗄️</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-900">Repo &amp; Mapper</h3>
+                    <p class="text-[11px] text-slate-500 mt-0.5 leading-snug"><span class="mono">UUID code</span> &amp; DTOs</p>
+                </div>
+
+                <!-- Node 6: GlobalExceptionHandler / HttpResponse -->
+                <div id="node-response" onclick="openQuickTerm('httpresponse')" class="pipe-node cursor-pointer bg-slate-50 border-2 border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">JSON</span>
+                        <span class="text-xs">📦</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-900">HttpResponse&lt;T&gt;</h3>
+                    <p class="text-[11px] text-slate-500 mt-0.5 leading-snug"><span class="mono">@JsonFormat</span> &amp; Advice</p>
+                </div>
+            </div>
+
+            <!-- Contextual Explanation Strip for clicked node or last action -->
+            <div id="actionExplainBox" class="mt-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3 flex items-start gap-3">
+                <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">i</div>
+                <div class="text-xs text-slate-700 leading-relaxed">
+                    <strong id="actionExplainTitle" class="text-indigo-950 block mb-0.5">Conseil de test pour observer Redis :</strong>
+                    <span id="actionExplainText">Cliquez une 1ère fois sur <strong>GET /api/notes</strong> (vous verrez un <strong>CACHE MISS</strong> qui interroge H2), puis cliquez une 2ème fois immédiatement (vous verrez un <strong>CACHE HIT</strong> direct depuis Redis sans toucher H2 !). Essayez ensuite de <strong>Couper Redis</strong> pour voir le <strong>CacheErrorHandler</strong> basculer sans erreur sur H2.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Workspace Grid: Left = Interactive Mini App (7 cols) | Right = Redis + JSON + Logs (5 cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1">
+
+            <!-- LEFT: Interactive Angular Prototype (Create, Filter, Read by UUID, Delete) -->
+            <section class="lg:col-span-7 flex flex-col gap-4">
+
+                <!-- Mini Form Card (POST /api/notes -> NoteRequest) -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                            Créer une Note (<span class="mono text-indigo-600">POST /api/notes</span> → <span class="mono">@CacheEvict</span>)
+                        </h3>
+                        <span class="text-[11px] mono text-slate-400">DTO: NoteRequest</span>
+                    </div>
+
+                    <form onsubmit="handleCreateNote(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div class="sm:col-span-5">
+                            <input id="inputTitle" type="text" placeholder="Titre (@Size min=3)..." class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="sm:col-span-4">
+                            <input id="inputDesc" type="text" placeholder="Description (@NotBlank)..." class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="sm:col-span-3 flex gap-2">
+                            <select id="inputLevel" class="flex-1 px-2 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-indigo-500">
+                                <option value="HIGH">HIGH</option>
+                                <option value="MEDIUM" selected>MEDIUM</option>
+                                <option value="LOW">LOW</option>
+                            </select>
+                            <button type="submit" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition shrink-0">
+                                + Créer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Notes List & Filters -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex-1 flex flex-col">
+                    <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800">Base H2 : Notes</h3>
+                            <span id="notesCounterBadge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">0</span>
+                        </div>
+
+                        <!-- Level Filter Buttons -->
+                        <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                            <button onclick="apiGetAllNotes()" id="flt-ALL" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-indigo-700 shadow-2xs">ALL</button>
+                            <button onclick="apiGetNotesByLevel('HIGH')" id="flt-HIGH" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-600 hover:text-slate-900">HIGH</button>
+                            <button onclick="apiGetNotesByLevel('MEDIUM')" id="flt-MEDIUM" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-600 hover:text-slate-900">MEDIUM</button>
+                            <button onclick="apiGetNotesByLevel('LOW')" id="flt-LOW" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-600 hover:text-slate-900">LOW</button>
+                        </div>
+                    </div>
+
+                    <!-- Cards Container -->
+                    <div id="notesListContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 content-start">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT: Technical Inspector (Redis Cache Live State + HttpResponse JSON + Spring Logs) -->
+            <section class="lg:col-span-5 flex flex-col gap-4">
+
+                <!-- 1. Redis Cache Memory Inspector -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                            <span>⚡</span> Clés en Mémoire Redis (TTL: 60s)
+                        </h3>
+                        <span id="redisKeyCount" class="text-[11px] mono px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-semibold">0 clé</span>
+                    </div>
+                    <div id="redisKeysView" class="space-y-1.5 max-h-32 overflow-y-auto text-xs">
+                        <div class="text-slate-400 italic text-[11px] py-2 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                            Cache vide — Appelez GET /api/notes ou cliquez sur "Lire" d'une note.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. HttpResponse<NoteResponse> JSON Output -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800">HttpResponse&lt;NoteResponse&gt;</h3>
+                            <span id="respStatusBadge" class="text-[10px] mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">200 OK</span>
+                        </div>
+                        <button onclick="copyLastJson()" class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">Copier JSON</button>
+                    </div>
+                    <pre id="jsonResponseBox" class="bg-slate-900 text-emerald-300 rounded-xl p-3 mono text-[11px] leading-relaxed overflow-auto max-h-52"></pre>
+                </div>
+
+                <!-- 3. Live Spring Boot Console Logs -->
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-3.5 shadow-xs flex-1 flex flex-col">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mono">Console Spring Boot (@Slf4j)</span>
+                        <button onclick="clearLogs()" class="text-[10px] text-slate-400 hover:text-white mono">Clear</button>
+                    </div>
+                    <div id="consoleLogsBox" class="mono text-[10.5px] space-y-1 overflow-y-auto max-h-40 text-slate-300 leading-snug">
+                        <!-- Logs appended here -->
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ==================== TAB 2: FULL GLOSSARY ==================== -->
+    <main id="view-glossary" class="hidden max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col gap-5">
+
+        <!-- Glossary Header & Search -->
+        <section class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col gap-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-extrabold text-slate-900">Dictionnaire Complet de Votre Microservice</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Chaque annotation, classe et concept utilisé depuis le début de notre conversation, expliqué clairement.</p>
+                </div>
+                <!-- Search Input -->
+                <div class="relative w-full sm:w-72">
+                    <input id="glossarySearch" oninput="renderGlossary()" type="text" placeholder="Rechercher un terme (@Data, Redis, UUID...)" class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-indigo-500">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
+            </div>
+
+            <!-- Category Filter Pills -->
+            <div class="flex flex-wrap gap-2" id="glossaryCategories">
+                <!-- Rendered by JS -->
+            </div>
+        </section>
+
+        <!-- Glossary Cards Grid -->
+        <section id="glossaryGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Rendered by JS -->
+        </section>
+    </main>
+
+    <!-- ==================== TAB 3: PITFALLS & FIXES (RECAP) ==================== -->
+    <main id="view-pitfalls" class="hidden max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col gap-5">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+            <h2 class="text-lg font-extrabold text-slate-900">Les 7 Pièges &amp; Bugs Résolus Ensemble (Récapitulatif)</h2>
+            <p class="text-xs text-slate-500 mt-1">Un résumé concret de toutes les erreurs et subtilités techniques que nous avons corrigées dans votre projet Spring Boot.</p>
+        </div>
+
+        <div id="pitfallsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Rendered by JS -->
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs font-semibold flex items-center gap-2">
+        <span id="toastDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span id="toastMsg">Message</span>
+    </div>
+
+    <!-- ==================== JAVASCRIPT APPLICATION LOGIC ==================== -->
+    <script>
+        /* =====================================================================
+         * 1. DATA: GLOSSARY OF EVERY TERM USED IN THE MICROSERVICE
+         * ===================================================================== */
+        const GLOSSARY_DATA = [
+            {
+                id: 'jsonformat',
+                term: '@JsonFormat',
+                category: 'Jackson & Lombok',
+                badgeColor: 'bg-purple-100 text-purple-800',
+                shortRole: 'Contrôle le formatage des dates en JSON (Sérialisation / Désérialisation).',
+                explanation: 'Annotation de la librairie Jackson. shape = STRING affiche la date en texte (au lieu d\'un timestamp numérique). pattern = "MM-dd-yyyy HH:mm:ss" définit le format (HH majuscule = 24h, hh minuscule = 12h ambigu sans AM/PM). timezone force le fuseau horaire (ex: America/New_York).',
+                code: '@JsonFormat(shape = JsonFormat.Shape.STRING,\n            pattern = "MM-dd-yyyy HH:mm:ss")\nprivate LocalDateTime createdAt;'
+            },
+            {
+                id: 'jsoninclude',
+                term: '@JsonInclude(NON_NULL)',
+                category: 'Jackson & Lombok',
+                badgeColor: 'bg-purple-100 text-purple-800',
+                shortRole: 'Masque automatiquement les champs null dans la réponse JSON.',
+                explanation: 'Utilisé sur HttpResponse<T>. Quand une requête réussit (200 OK), les champs reason et developerMessage sont null et disparaissent proprement du JSON retourné au client Angular.',
+                code: '@JsonInclude(JsonInclude.Include.NON_NULL)\npublic class HttpResponse<T> { ... }'
+            },
+            {
+                id: 'lombok-data',
+                term: '@Data vs @Getter/@Setter',
+                category: 'Jackson & Lombok',
+                badgeColor: 'bg-purple-100 text-purple-800',
+                shortRole: 'Génère automatiquement le code répétitif (getters, setters, toString, equals).',
+                explanation: '@Data regroupe @Getter, @Setter, @ToString, @EqualsAndHashCode et @RequiredArgsConstructor (mais PAS @NoArgsConstructor ni @AllArgsConstructor). Idéal pour les DTOs, mais déconseillé sur les @Entity JPA à cause des risques de LazyInitializationException et boucles infinies.',
+                code: '// DTO : @Data @Builder @NoArgsConstructor @AllArgsConstructor\n// Entity JPA : @Getter @Setter @NoArgsConstructor @AllArgsConstructor'
+            },
+            {
+                id: 'superbuilder',
+                term: '@Builder & @SuperBuilder',
+                category: 'Jackson & Lombok',
+                badgeColor: 'bg-purple-100 text-purple-800',
+                shortRole: 'Construit des objets complexes de façon fluide et lisible.',
+                explanation: '@Builder permet d\'écrire HttpResponse.builder().statusCode(200).build(). Si la classe possède des champs protected destinés à l\'héritage, on utilise @SuperBuilder. Pensez toujours à ajouter @NoArgsConstructor et @AllArgsConstructor pour Jackson.',
+                code: 'HttpResponse.<NoteResponse>builder()\n    .statusCode(200)\n    .httpStatus(HttpStatus.OK)\n    .build();'
+            },
+            {
+                id: 'httpresponse',
+                term: 'HttpResponse<T> & HttpStatus',
+                category: 'Architecture & DTOs',
+                badgeColor: 'bg-indigo-100 text-indigo-800',
+                shortRole: 'Enveloppe générique standardisée pour toutes les réponses REST.',
+                explanation: 'Garantit au front-end Angular que chaque réponse (succès ou erreur) possède toujours la même structure (timeStamp, statusCode, httpStatus, message, reason, data). On garde l\'enum HttpStatus (et non l\'interface HttpStatusCode) pour éviter les bugs de sérialisation Jackson.',
+                code: 'public class HttpResponse<T> implements Serializable {\n    protected HttpStatus httpStatus;\n    protected Collection<? extends T> data;\n}'
+            },
+            {
+                id: 'dtos-mapper',
+                term: 'DTO (NoteRequest / NoteResponse) & NoteMapper',
+                category: 'Architecture & DTOs',
+                badgeColor: 'bg-indigo-100 text-indigo-800',
+                shortRole: 'Sépare la base de données (Entity) des données exposées par l\'API.',
+                explanation: 'NoteRequest valide uniquement les champs que l\'utilisateur a le droit d\'envoyer (empêche la faille Mass Assignment). NoteResponse masque l\'ID interne Long de la BDD. NoteMapper assure la conversion propre Entity <-> DTO.',
+                code: 'Note entity = noteMapper.toEntity(noteRequest);\nNoteResponse dto = noteMapper.toResponse(savedNote);'
+            },
+            {
+                id: 'uuid-code',
+                term: 'UUID code vs Long id (@PrePersist)',
+                category: 'Base H2 & Config',
+                badgeColor: 'bg-emerald-100 text-emerald-800',
+                shortRole: 'Identifiant public imprévisible pour sécuriser les URLs.',
+                explanation: 'Long id reste la clé primaire interne (rapide pour les index SQL). UUID code est généré automatiquement avant l\'insertion via @PrePersist et exposé dans les URLs (/api/notes/{code}) pour éviter les attaques IDOR (deviner /notes/1, /notes/2).',
+                code: '@PrePersist\nprotected void onCreate() {\n    if (this.code == null) this.code = UUID.randomUUID();\n}'
+            },
+            {
+                id: 'controller',
+                term: '@RestController & @Valid',
+                category: 'Exceptions & Validation',
+                badgeColor: 'bg-rose-100 text-rose-800',
+                shortRole: 'Point d\'entrée HTTP qui valide automatiquement le JSON entrant.',
+                explanation: '@RestController expose les routes /api/notes. @Valid placé devant @RequestBody vérifie les contraintes (@NotBlank, @Size, @NotNull) sur NoteRequest avant d\'entrer dans le service et déclenche MethodArgumentNotValidException en cas d\'erreur.',
+                code: '@PostMapping\npublic ResponseEntity<HttpResponse<NoteResponse>> createNote(\n    @Valid @RequestBody NoteRequest req) { ... }'
+            },
+            {
+                id: 'exception-handler',
+                term: '@RestControllerAdvice & ResponseEntityExceptionHandler',
+                category: 'Exceptions & Validation',
+                badgeColor: 'bg-rose-100 text-rose-800',
+                shortRole: 'Intercepte globalement toutes les erreurs et les formate en HttpResponse.',
+                explanation: 'Centralise la gestion d\'erreurs. Surcharger handleMethodArgumentNotValid capture les erreurs @Valid (400), handleExceptionInternal capture les erreurs internes Spring (405, 500...), et @ExceptionHandler(NoteNotFoundException.class) renvoie un 404 propre.',
+                code: '@RestControllerAdvice\npublic class GlobalExceptionHandler\n       extends ResponseEntityExceptionHandler { ... }'
+            },
+            {
+                id: 'service',
+                term: '@Service & @Transactional',
+                category: 'Architecture & DTOs',
+                badgeColor: 'bg-indigo-100 text-indigo-800',
+                shortRole: 'Contient toute la logique métier et la gestion des transactions BDD.',
+                explanation: 'NoteServiceImpl orchestre NoteRepository, NoteMapper et le cache Redis. @Transactional garantit l\'intégrité des écritures (rollback en cas d\'erreur), et @Transactional(readOnly = true) optimise les lectures.',
+                code: '@Service\n@Transactional\npublic class NoteServiceImpl implements NoteService { ... }'
+            },
+            {
+                id: 'h2',
+                term: 'H2 In-Memory & CommandLineRunner',
+                category: 'Base H2 & Config',
+                badgeColor: 'bg-emerald-100 text-emerald-800',
+                shortRole: 'Base SQL légère en RAM pour développer rapidement sans serveur SQL.',
+                explanation: 'L\'URL correcte est jdbc:h2:mem:Db_notes;DB_CLOSE_DELAY=-1 (empêche l\'effacement entre les connexions). DatabaseInitializer utilise CommandLineRunner pour insérer des notes de démo dès le démarrage.',
+                code: 'spring.datasource.url=jdbc:h2:mem:Db_notes;DB_CLOSE_DELAY=-1\nspring.h2.console.enabled=true'
+            },
+            {
+                id: 'cors-swagger',
+                term: 'CorsConfig & OpenApiConfig (Swagger)',
+                category: 'Base H2 & Config',
+                badgeColor: 'bg-emerald-100 text-emerald-800',
+                shortRole: 'Autorise le Front-End Angular (4200) et documente l\'API.',
+                explanation: 'CorsConfig autorise les appels Cross-Origin depuis http://localhost:4200 vers le port 8082. OpenApiConfig génère automatiquement une interface interactive sur /swagger-ui.html pour tester chaque endpoint.',
+                code: 'config.setAllowedOrigins(List.of("http://localhost:4200"));\n// Swagger UI : http://localhost:8082/swagger-ui.html'
+            },
+            {
+                id: 'redis',
+                term: '@EnableCaching & RedisConfig (CacheManager)',
+                category: 'Cache Redis',
+                badgeColor: 'bg-amber-100 text-amber-800',
+                shortRole: 'Active le cache distribué Redis avec une durée de vie (TTL) de 60s.',
+                explanation: 'Nécessite spring-boot-starter-data-redis ET spring-boot-starter-cache. RedisConfig déclare le bean CacheManager avec un TTL de 60 secondes et sérialise les objets qui doivent impérativement implémenter Serializable.',
+                code: '@Configuration @EnableCaching\npublic class RedisConfig implements CachingConfigurer {\n    @Bean public CacheManager cacheManager(...) { ... }\n}'
+            },
+            {
+                id: 'cache-annotations',
+                term: '@Cacheable, @CacheEvict & @Caching',
+                category: 'Cache Redis',
+                badgeColor: 'bg-amber-100 text-amber-800',
+                shortRole: 'Lit le cache en lecture et nettoie le cache en écriture.',
+                explanation: '@Cacheable met en cache le retour des méthodes GET (Cache HIT = H2 non appelée). @CacheEvict supprime les entrées obsolètes lors d\'un POST/PUT/DELETE. @Caching permet de combiner plusieurs @CacheEvict sur la même méthode.',
+                code: '@Cacheable(value = "noteByCode", key = "#code")\n// Et sur update/delete :\n@Caching(evict = { @CacheEvict("noteByCode"), @CacheEvict(value="notesList", allEntries=true) })'
+            },
+            {
+                id: 'cache-error-handler',
+                term: 'CacheErrorHandler (Tolérance aux pannes)',
+                category: 'Cache Redis',
+                badgeColor: 'bg-amber-100 text-amber-800',
+                shortRole: 'Évite un crash 500 si le serveur Redis est éteint (Connection refused).',
+                explanation: 'Bonne pratique Senior (Graceful Degradation). En implémentant CachingConfigurer.errorHandler(), si Redis est injoignable sur localhost:6379, Spring loggue un simple WARN et exécute la requête sur H2 de manière transparente.',
+                code: 'public void handleCacheGetError(RuntimeException ex, Cache c, Object k) {\n    log.warn("Redis indisponible -> Bascule automatique sur H2");\n}'
+            },
+            {
+                id: 'serializable',
+                term: 'implements Serializable',
+                category: 'Cache Redis',
+                badgeColor: 'bg-amber-100 text-amber-800',
+                shortRole: 'Transforme un objet Java en flux d\'octets pour le stocker dans Redis.',
+                explanation: 'Pour que Redis puisse sauvegarder HttpResponse<NoteResponse> en mémoire, la classe enveloppe ET son contenu (NoteResponse) doivent tous deux implémenter java.io.Serializable avec un serialVersionUID.',
+                code: 'public class NoteResponse implements Serializable {\n    private static final long serialVersionUID = 1L;\n}'
+            },
+            {
+                id: 'angular',
+                term: 'Angular 22 (Standalone, Signals & HttpClient)',
+                category: 'Front-End & Sécurité',
+                badgeColor: 'bg-sky-100 text-sky-800',
+                shortRole: 'Architecture moderne du client Web connecté à votre API Spring Boot.',
+                explanation: 'Les Standalone Components éliminent les anciens NgModules. Les Signals (signal(), computed()) mettent à jour l\'écran automatiquement dès que NoteService (@Injectable) reçoit HttpResponse<NoteResponse> via HttpClient.',
+                code: 'notes = signal<NoteResponse[]>([]);\nprivate noteService = inject(NoteService);'
+            },
+            {
+                id: 'jwt-stateless',
+                term: 'Spring Security 6 & JWT (Optionnel / Étudié)',
+                category: 'Front-End & Sécurité',
+                badgeColor: 'bg-sky-100 text-sky-800',
+                shortRole: 'Authentification Stateless par token signé HMAC-SHA256.',
+                explanation: 'Même si vous avez choisi de garder l\'application sans sécurité pour avancer sur Angular d\'abord, vous disposez déjà du plan complet : JwtAuthenticationFilter, SecurityContextHolder, rôles USER/ADMIN et gestion 401/403 au format HttpResponse.',
+                code: 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...'
+            }
+        ];
+
+        /* =====================================================================
+         * 2. DATA: PITFALLS & FIXES WE SOLVED TOGETHER
+         * ===================================================================== */
+        const PITFALLS_DATA = [
+            {
+                title: '1. Format d\'heure : hh minuscule vs HH majuscule',
+                problem: '@JsonFormat(pattern = "MM-dd-yyyy hh:mm:ss") affiche "08:00:00" aussi bien pour 8h du matin que pour 20h du soir.',
+                solution: 'Toujours utiliser HH (majuscule, format 24h : 00-23) dans les APIs backend : pattern = "MM-dd-yyyy HH:mm:ss".'
+            },
+            {
+                title: '2. @Data de Lombok sur une @Entity JPA',
+                problem: '@Data génère toString() et equals()/hashCode() sur tous les champs, ce qui peut déclencher des LazyInitializationException ou des StackOverflowError sur les relations JPA.',
+                solution: 'Utiliser @Data uniquement sur les DTOs. Sur les @Entity, préférer @Getter, @Setter, @NoArgsConstructor et @AllArgsConstructor.'
+            },
+            {
+                title: '3. HttpStatusCode (Interface) vs HttpStatus (Enum) dans Jackson',
+                problem: 'Spring Boot 3 passe HttpStatusCode dans handleMethodArgumentNotValid. Stocker cette interface dans HttpResponse casse la désérialisation Jackson et produit un JSON pollué.',
+                solution: 'Garder protected HttpStatus httpStatus; dans HttpResponse et convertir via HttpStatus.resolve(statusCode.value()).'
+            },
+            {
+                title: '4. Syntaxe JDBC H2 manquante (jdbc:mem)',
+                problem: 'spring.datasource.url=jdbc:mem:Db_notes échoue car le sous-protocole h2 manque et la BDD se vide à chaque fermeture de connexion.',
+                solution: 'Écrire jdbc:h2:mem:Db_notes;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE avec driver org.h2.Driver.'
+            },
+            {
+                title: '5. Bean CacheManager introuvable au démarrage',
+                problem: 'APPLICATION FAILED TO START : A component required a bean of type org.springframework.cache.CacheManager could not be found.',
+                solution: 'Ajouter la dépendance spring-boot-starter-cache dans pom.xml et déclarer explicitement @Bean CacheManager dans RedisConfig.'
+            },
+            {
+                title: '6. RedisConnectionFailureException (Connection refused)',
+                problem: 'Redis est un serveur externe (port 6379) : s\'il est éteint, toute requête annotée @Cacheable crashe en erreur 500.',
+                solution: 'Démarrer Redis (ex: Docker) ET implémenter CachingConfigurer + CacheErrorHandler dans RedisConfig pour basculer automatiquement sur H2.'
+            },
+            {
+                title: '7. Exposer Long id dans les URLs (/api/notes/1)',
+                problem: 'Un attaquant peut deviner les identifiants séquentiels (1, 2, 3...) et énumérer les données (faille IDOR).',
+                solution: 'Ajouter un UUID code généré dans @PrePersist et l\'utiliser dans tous les endpoints et DTOs NoteResponse.'
+            }
+        ];
+
+        /* =====================================================================
+         * 3. SIMULATOR STATE (H2 DB + REDIS CACHE + TTL ENGINE)
+         * ===================================================================== */
+        let redisOnline = true;
+        let activeFilter = 'ALL';
+        let lastJsonString = '';
+
+        // Simulated H2 In-Memory Table
+        let h2Notes = [
+            {
+                code: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+                title: 'Architecture Spring Boot',
+                description: 'Couches Controller, Service, Repository, DTOs et NoteMapper.',
+                level: 'HIGH',
+                createdAt: '11-22-2026 09:15:20',
+                updatedAt: '11-22-2026 09:15:20'
+            },
+            {
+                code: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+                title: 'Cache Redis & Fallback',
+                description: 'Configuration @Cacheable, @CacheEvict et CacheErrorHandler sur port 6379.',
+                level: 'MEDIUM',
+                createdAt: '11-22-2026 11:30:00',
+                updatedAt: '11-22-2026 11:30:00'
+            },
+            {
+                code: '1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed',
+                title: 'Front-End Angular 22',
+                description: 'Standalone Components, Signals et HttpClient connectés au port 8082.',
+                level: 'LOW',
+                createdAt: '11-22-2026 14:45:10',
+                updatedAt: '11-22-2026 14:45:10'
+            }
+        ];
+
+        // Simulated Redis Memory Store: { key: { value: HttpResponse, expiresAt: timestamp } }
+        let redisStore = {};
+        const REDIS_TTL_SECONDS = 60;
+
+        function formatNow() {
+            const d = new Date();
+            const p = n => String(n).padStart(2, '0');
+            return `${p(d.getMonth() + 1)}-${p(d.getDate())}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+
+        function showToast(msg, dotClass = 'bg-emerald-400') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            document.getElementById('toastDot').className = `w-2.5 h-2.5 rounded-full ${dotClass}`;
+            toast.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => toast.classList.add('hidden'), 2600);
+        }
+
+        /* =====================================================================
+         * 4. LOGGING & PIPELINE VISUALIZATION HELPERS
+         * ===================================================================== */
+        function addLog(level, message) {
+            const box = document.getElementById('consoleLogsBox');
+            const time = new Date().toTimeString().split(' ')[0];
+            const color = level === 'ERROR' ? 'text-rose-400' : level === 'WARN' ? 'text-amber-400' : level === 'HIT' ? 'text-emerald-400' : 'text-sky-300';
+            const line = document.createElement('div');
+            line.innerHTML = `<span class="text-slate-500">${time}</span> <span class="${color} font-bold">[${level}]</span> <span>${escapeHtml(message)}</span>`;
+            box.prepend(line);
+        }
+
+        function clearLogs() {
+            document.getElementById('consoleLogsBox').innerHTML = '';
+        }
+
+        function resetPipelineVisuals() {
+            ['angular', 'controller', 'service', 'redis', 'h2', 'response'].forEach(id => {
+                const el = document.getElementById(`node-${id}`);
+                el.classList.remove('pipe-active', 'pipe-hit', 'pipe-warn', 'pipe-error', 'pipe-dim');
+            });
+        }
+
+        function highlightPipeline(states, summaryText, explainTitle, explainText) {
+            resetPipelineVisuals();
+            Object.entries(states).forEach(([node, cls]) => {
+                const el = document.getElementById(`node-${node}`);
+                if (el && cls) el.classList.add(cls);
+            });
+            document.getElementById('pipelineSummaryBadge').textContent = summaryText;
+            document.getElementById('actionExplainTitle').textContent = explainTitle;
+            document.getElementById('actionExplainText').innerHTML = explainText;
+        }
+
+        function displayHttpResponse(httpStatusCode, httpStatusName, payloadObj) {
+            const badge = document.getElementById('respStatusBadge');
+            badge.textContent = `${httpStatusCode} ${httpStatusName}`;
+            const box = document.getElementById('jsonResponseBox');
+
+            if (httpStatusCode >= 400) {
+                badge.className = 'text-[10px] mono font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200';
+                box.className = 'bg-slate-900 text-rose-300 rounded-xl p-3 mono text-[11px] leading-relaxed overflow-auto max-h-52';
+            } else {
+                badge.className = 'text-[10px] mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200';
+                box.className = 'bg-slate-900 text-emerald-300 rounded-xl p-3 mono text-[11px] leading-relaxed overflow-auto max-h-52';
+            }
+            lastJsonString = JSON.stringify(payloadObj, null, 2);
+            box.textContent = lastJsonString;
+        }
+
+        function buildHttpResponse(data, message, statusCode, httpStatus, reason = null) {
+            const resp = {
+                timeStamp: formatNow(),
+                statusCode: statusCode,
+                httpStatus: httpStatus
+            };
+            // Simule @JsonInclude(NON_NULL)
+            if (reason) resp.reason = reason;
+            if (message) resp.message = message;
+            if (data !== null) resp.data = data;
+            return resp;
+        }
+
+        /* =====================================================================
+         * 5. REDIS ENGINE (GET / PUT / EVICT / TTL)
+         * ===================================================================== */
+        function redisGet(key) {
+            if (!redisOnline) {
+                addLog('WARN', `CacheErrorHandler -> Redis indisponible (GET '${key}'). Bascule automatique sur H2.`);
+                return { status: 'DOWN', data: null };
+            }
+            const entry = redisStore[key];
+            if (entry && entry.expiresAt > Date.now()) {
+                return { status: 'HIT', data: entry.value };
+            }
+            if (entry) delete redisStore[key];
+            return { status: 'MISS', data: null };
+        }
+
+        function redisPut(key, value) {
+            if (!redisOnline) {
+                addLog('WARN', `CacheErrorHandler -> Impossible d'écrire '${key}' dans Redis (serveur éteint).`);
+                return;
+            }
+            redisStore[key] = {
+                value: JSON.parse(JSON.stringify(value)), // Simule Serializable clone
+                expiresAt: Date.now() + REDIS_TTL_SECONDS * 1000
+            };
+            renderRedisKeys();
+        }
+
+        function redisEvictPrefix(prefix) {
+            if (!redisOnline) {
+                addLog('WARN', `CacheErrorHandler -> EVICT '${prefix}*' ignoré (Redis éteint).`);
+                return;
+            }
+            Object.keys(redisStore).forEach(k => {
+                if (k.startsWith(prefix)) delete redisStore[k];
+            });
+            renderRedisKeys();
+        }
+
+        function redisEvictExact(key) {
+            if (!redisOnline) return;
+            delete redisStore[key];
+            renderRedisKeys();
+        }
+
+        function renderRedisKeys() {
+            const container = document.getElementById('redisKeysView');
+            const now = Date.now();
+            // Purge expired keys
+            Object.keys(redisStore).forEach(k => {
+                if (redisStore[k].expiresAt <= now) delete redisStore[k];
+            });
+
+            const keys = Object.keys(redisStore);
+            document.getElementById('redisKeyCount').textContent = `${keys.length} clé${keys.length > 1 ? 's' : ''}`;
+
+            if (!redisOnline) {
+                container.innerHTML = `<div class="text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-[11px] font-medium text-center">Serveur Redis coupé (localhost:6379 -> Connection refused).<br>CacheErrorHandler actif : l'API continue via H2 !</div>`;
+                return;
+            }
+
+            if (keys.length === 0) {
+                container.innerHTML = `<div class="text-slate-400 italic text-[11px] py-2 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">Cache vide — Appelez GET /api/notes ou "Lire" sur une note.</div>`;
+                return;
+            }
+
+            container.innerHTML = keys.map(k => {
+                const ttl = Math.max(0, Math.ceil((redisStore[k].expiresAt - now) / 1000));
+                return `
+                    <div class="flex items-center justify-between bg-amber-50/70 border border-amber-200/80 rounded-lg px-2.5 py-1.5">
+                        <span class="mono text-[11px] font-semibold text-amber-950 truncate mr-2">${escapeHtml(k)}</span>
+                        <span class="mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-white text-amber-700 border border-amber-200 shrink-0">TTL ${ttl}s</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleRedisServer() {
+            redisOnline = !redisOnline;
+            const dot = document.getElementById('redisDot');
+            const label = document.getElementById('redisStatusLabel');
+            const btn = document.getElementById('redisToggleBtn');
+            const sub = document.getElementById('node-redis-sub');
+
+            if (redisOnline) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+                label.textContent = 'EN LIGNE';
+                label.className = 'mono text-[11px] text-emerald-700 ml-1.5 font-semibold';
+                btn.textContent = 'Couper Redis';
+                btn.className = 'ml-2 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition';
+                sub.innerHTML = '<span class="mono">CacheManager</span> + Fallback';
+                addLog('INFO', 'Serveur Redis démarré sur localhost:6379 (Prêt pour @Cacheable).');
+                showToast('Serveur Redis ALLUMÉ (:6379)');
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+                label.textContent = 'HORS LIGNE';
+                label.className = 'mono text-[11px] text-rose-700 ml-1.5 font-semibold';
+                btn.textContent = 'Allumer Redis';
+                btn.className = 'ml-2 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition';
+                sub.innerHTML = '<span class="mono text-rose-600">Connection refused</span>';
+                addLog('WARN', 'Serveur Redis arrêté -> Simulation de Connection refused: getsockopt.');
+                showToast('Redis COUPÉ — CacheErrorHandler prendra le relais', 'bg-amber-400');
+            }
+            renderRedisKeys();
+        }
+
+        function flushRedisManual() {
+            redisStore = {};
+            renderRedisKeys();
+            addLog('INFO', 'Cache Redis vidé manuellement (FLUSHALL).');
+            showToast('Cache Redis vidé');
+        }
+
+        /* =====================================================================
+         * 6. SIMULATED SPRING BOOT ENDPOINTS
+         * ===================================================================== */
+        function updateFilterButtons(selected) {
+            activeFilter = selected;
+            ['ALL', 'HIGH', 'MEDIUM', 'LOW'].forEach(f => {
+                const btn = document.getElementById(`flt-${f}`);
+                if (f === selected) {
+                    btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-indigo-700 shadow-2xs';
+                } else {
+                    btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-600 hover:text-slate-900';
+                }
+            });
+        }
+
+        function apiGetAllNotes() {
+            updateFilterButtons('ALL');
+            const cacheKey = 'notesList::all';
+            const cached = redisGet(cacheKey);
+
+            if (cached.status === 'HIT') {
+                addLog('HIT', `CACHE HIT sur '${cacheKey}' -> Réponse instantanée depuis Redis (H2 non interrogée !)`);
+                renderNotesList(cached.data.data);
+                displayHttpResponse(200, 'OK', cached.data);
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-hit', h2: 'pipe-dim', response: 'pipe-hit' },
+                    'GET /api/notes → ⚡ CACHE HIT (2ms)',
+                    'CACHE HIT Redis (@Cacheable("notesList", key="\'all\'"))',
+                    'Spring Boot a trouvé la clé <code>notesList::all</code> dans Redis. La méthode <code>getAllNotes()</code> et la base H2 ont été <strong>totalement court-circuitées</strong> !'
+                );
+                return;
+            }
+
+            // Cache MISS or Redis DOWN -> Query H2
+            const response = buildHttpResponse(h2Notes, `${h2Notes.length} note(s) récupérée(s)`, 200, 'OK');
+            renderNotesList(h2Notes);
+            displayHttpResponse(200, 'OK', response);
+
+            if (cached.status === 'DOWN') {
+                addLog('INFO', 'Exécution de noteRepository.findAll() sur H2 (mode dégradé sans Redis).');
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                    'GET /api/notes → ⚠️ FALLBACK H2 (200 OK)',
+                    'Tolérance aux pannes : CacheErrorHandler en action',
+                    'Redis étant coupé, <code>RedisConfig.errorHandler()</code> a intercepté <code>RedisConnectionFailureException</code> et laissé <code>NoteServiceImpl</code> interroger H2 sans planter !'
+                );
+            } else {
+                addLog('INFO', `CACHE MISS sur '${cacheKey}' -> Requête SQL H2 exécutée puis mise en cache (TTL 60s).`);
+                redisPut(cacheKey, response);
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                    'GET /api/notes → CACHE MISS → H2 + PUT Redis',
+                    'CACHE MISS initial -> Stockage dans Redis (TTL 60s)',
+                    'La clé <code>notesList::all</code> n\'était pas dans Redis. Spring a interrogé H2, mappé en <code>NoteResponse</code>, puis sauvegardé le résultat sérialisé dans Redis. <strong>Recliquez sur GET /api/notes pour voir le CACHE HIT !</strong>'
+                );
+            }
+        }
+
+        function apiGetNotesByLevel(level) {
+            updateFilterButtons(level);
+            const cacheKey = `notesList::level_${level}`;
+            const cached = redisGet(cacheKey);
+
+            if (cached.status === 'HIT') {
+                addLog('HIT', `CACHE HIT sur '${cacheKey}' -> Filtrage lu depuis Redis.`);
+                renderNotesList(cached.data.data);
+                displayHttpResponse(200, 'OK', cached.data);
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-hit', h2: 'pipe-dim', response: 'pipe-hit' },
+                    `GET /api/notes/filter?level=${level} → ⚡ CACHE HIT`,
+                    `CACHE HIT Redis (@Cacheable key="'level_' + #level.name()")`,
+                    `Les notes de priorité <strong>${level}</strong> ont été servies directement depuis la RAM de Redis sans aucune requête SQL.`
+                );
+                return;
+            }
+
+            const filtered = h2Notes.filter(n => n.level === level);
+            const response = buildHttpResponse(filtered, `${filtered.length} note(s) trouvée(s) pour le niveau ${level}`, 200, 'OK');
+            renderNotesList(filtered);
+            displayHttpResponse(200, 'OK', response);
+
+            if (cached.status === 'DOWN') {
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                    `GET /filter?level=${level} → ⚠️ FALLBACK H2`,
+                    'Fallback automatique vers H2 (Redis éteint)',
+                    `<code>noteRepository.findByLevel(Level.${level})</code> a retourné ${filtered.length} note(s) malgré la coupure de Redis.`
+                );
+            } else {
+                addLog('INFO', `CACHE MISS '${cacheKey}' -> Requête H2 findByLevel(${level}) mise en cache.`);
+                redisPut(cacheKey, response);
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                    `GET /filter?level=${level} → H2 + PUT Redis`,
+                    `Mise en cache de la clé '${cacheKey}'`,
+                    `Spring Data JPA a exécuté la requête dérivée <code>findByLevel(${level})</code> et stocké la liste dans Redis pour 60 secondes.`
+                );
+            }
+        }
+
+        function apiGetNoteByCode(code) {
+            const cacheKey = `noteByCode::${code}`;
+            const cached = redisGet(cacheKey);
+
+            if (cached.status === 'HIT') {
+                addLog('HIT', `CACHE HIT sur '${cacheKey}' -> Note individuelle lue depuis Redis.`);
+                displayHttpResponse(200, 'OK', cached.data);
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-hit', h2: 'pipe-dim', response: 'pipe-hit' },
+                    `GET /api/notes/${code.substring(0,8)}... → ⚡ CACHE HIT`,
+                    'CACHE HIT sur note individuelle (@Cacheable("noteByCode", key="#code"))',
+                    `La note identifiée par le <code>UUID code</code> a été lue directement depuis Redis.`
+                );
+                return;
+            }
+
+            const found = h2Notes.find(n => n.code === code);
+            if (!found) {
+                simulateNotFoundError(code);
+                return;
+            }
+
+            const response = buildHttpResponse([found], 'Note récupérée avec succès', 200, 'OK');
+            displayHttpResponse(200, 'OK', response);
+            if (cached.status !== 'DOWN') {
+                addLog('INFO', `CACHE MISS '${cacheKey}' -> Chargement depuis H2 via findByCode(UUID).`);
+                redisPut(cacheKey, response);
+            }
+            highlightPipeline(
+                { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                `GET /api/notes/${code.substring(0,8)}... → H2 + Cache`,
+                'Recherche par UUID code (Protection IDOR)',
+                `<code>noteRepository.findByCode(code)</code> a retrouvé la note dans H2, puis <code>NoteMapper</code> a caché l'ID interne <code>Long id</code>.`
+            );
+        }
+
+        function handleCreateNote(event) {
+            event.preventDefault();
+            const title = document.getElementById('inputTitle').value.trim();
+            const desc = document.getElementById('inputDesc').value.trim();
+            const level = document.getElementById('inputLevel').value;
+
+            // Validation @Valid NoteRequest
+            const errors = [];
+            if (!title) errors.push('Le titre est obligatoire');
+            else if (title.length < 3 || title.length > 100) errors.push('Le titre doit contenir entre 3 et 100 caractères');
+            if (!desc) errors.push('La description ne peut pas être vide');
+
+            if (errors.length > 0) {
+                const reason = 'Invalid fields: ' + errors.join(' , ');
+                const errResp = buildHttpResponse(null, null, 400, 'BAD_REQUEST', reason);
+                displayHttpResponse(400, 'BAD_REQUEST', errResp);
+                addLog('ERROR', `GlobalExceptionHandler.handleMethodArgumentNotValid -> ${reason}`);
+                highlightPipeline(
+                    { angular: 'pipe-active', controller: 'pipe-error', service: 'pipe-dim', redis: 'pipe-dim', h2: 'pipe-dim', response: 'pipe-error' },
+                    'POST /api/notes → ❌ 400 BAD_REQUEST (@Valid)',
+                    'Rejeté par @Valid avant d\'entrer dans NoteService !',
+                    `<code>MethodArgumentNotValidException</code> a été interceptée par <code>GlobalExceptionHandler</code> qui formate les messages dans le champ <code>reason</code>.`
+                );
+                showToast('Erreur 400 : Vérifiez les champs (@Valid)', 'bg-amber-400');
+                return;
+            }
+
+            const now = formatNow();
+            const newNote = {
+                code: generateUUID(),
+                title: title,
+                description: desc,
+                level: level,
+                createdAt: now,
+                updatedAt: now
+            };
+
+            h2Notes.unshift(newNote);
+            // @CacheEvict(value = "notesList", allEntries = true)
+            redisEvictPrefix('notesList::');
+            addLog('INFO', `POST /api/notes -> Note créée [UUID: ${newNote.code.substring(0, 8)}...] & @CacheEvict('notesList') exécuté.`);
+
+            document.getElementById('inputTitle').value = '';
+            document.getElementById('inputDesc').value = '';
+
+            const resp = buildHttpResponse([newNote], 'Note créée avec succès', 201, 'CREATED');
+            displayHttpResponse(201, 'CREATED', resp);
+            updateFilterButtons('ALL');
+            renderNotesList(h2Notes);
+
+            highlightPipeline(
+                { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                'POST /api/notes → ✅ 201 CREATED + @CacheEvict',
+                'Création en H2 (@PrePersist UUID) + Invalidation du Cache Redis',
+                'La nouvelle note a reçu un <code>UUID code</code> automatique. L\'annotation <code>@CacheEvict(value="notesList", allEntries=true)</code> a vidé les anciennes listes du cache Redis pour éviter les données périmées !'
+            );
+            showToast('Note créée (201) & Cache notesList invalidé');
+        }
+
+        function apiDeleteNote(code) {
+            const idx = h2Notes.findIndex(n => n.code === code);
+            if (idx === -1) {
+                simulateNotFoundError(code);
+                return;
+            }
+            const deleted = h2Notes.splice(idx, 1)[0];
+
+            // @Caching(evict = { noteByCode::code, notesList::* })
+            redisEvictExact(`noteByCode::${code}`);
+            redisEvictPrefix('notesList::');
+
+            addLog('INFO', `DELETE /api/notes/${code.substring(0, 8)}... -> Supprimée de H2 + @Caching(@CacheEvict noteByCode & notesList).`);
+
+            const resp = buildHttpResponse([deleted], 'Note supprimée avec succès', 200, 'OK');
+            displayHttpResponse(200, 'OK', resp);
+            renderNotesList(activeFilter === 'ALL' ? h2Notes : h2Notes.filter(n => n.level === activeFilter));
+
+            highlightPipeline(
+                { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-warn', h2: 'pipe-hit', response: 'pipe-hit' },
+                'DELETE /api/notes/{code} → 🗑️ 200 OK + @Caching Evict',
+                'Double invalidation Redis via @Caching',
+                '<code>@Caching</code> a supprimé à la fois la clé individuelle <code>noteByCode::code</code> ET toutes les listes <code>notesList::*</code> dans Redis.'
+            );
+            showToast('Note supprimée & Caches nettoyés', 'bg-rose-400');
+        }
+
+        function simulateValidationError() {
+            document.getElementById('inputTitle').value = 'A';
+            document.getElementById('inputDesc').value = '';
+            handleCreateNote(new Event('submit'));
+        }
+
+        function simulateNotFoundError(customUuid = '00000000-0000-0000-0000-000000000000') {
+            const reason = `Aucune note trouvée avec le code : ${customUuid}`;
+            const errResp = buildHttpResponse(null, null, 404, 'NOT_FOUND', reason);
+            displayHttpResponse(404, 'NOT_FOUND', errResp);
+            addLog('ERROR', `NoteNotFoundException -> ${reason}`);
+            highlightPipeline(
+                { angular: 'pipe-active', controller: 'pipe-active', service: 'pipe-active', redis: 'pipe-dim', h2: 'pipe-error', response: 'pipe-error' },
+                'GET /api/notes/{uuid} → ❌ 404 NOT_FOUND',
+                'NoteNotFoundException interceptée par @ExceptionHandler',
+                '<code>findNoteByCodeOrThrow()</code> a levé <code>NoteNotFoundException</code>. <code>GlobalExceptionHandler</code> l\'a transformée en un <code>HttpResponse</code> 404 propre.'
+            );
+            showToast('Erreur 404 NOT_FOUND simulée', 'bg-rose-400');
+        }
+
+        /* =====================================================================
+         * 7. RENDERING UI LISTS & GLOSSARY
+         * ===================================================================== */
+        function renderNotesList(list) {
+            document.getElementById('notesCounterBadge').textContent = list.length;
+            const container = document.getElementById('notesListContainer');
+
+            if (list.length === 0) {
+                container.innerHTML = `<div class="col-span-full py-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">Aucune note pour ce filtre.</div>`;
+                return;
+            }
+
+            container.innerHTML = list.map(n => {
+                const badge = n.level === 'HIGH'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : n.level === 'MEDIUM'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                return `
+                    <div class="bg-slate-50/70 hover:bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col justify-between transition animate-fade-up">
+                        <div>
+                            <div class="flex items-center justify-between gap-2 mb-1.5">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge}">${n.level}</span>
+                                <span class="mono text-[10px] text-slate-400" title="${n.code}">UUID: ${n.code.substring(0, 8)}...</span>
+                            </div>
+                            <h4 class="text-xs font-bold text-slate-900 mb-1">${escapeHtml(n.title)}</h4>
+                            <p class="text-[11px] text-slate-600 leading-relaxed mb-2.5">${escapeHtml(n.description)}</p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-200/70 flex items-center justify-between">
+                            <span class="mono text-[10px] text-slate-400">${n.updatedAt}</span>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="apiGetNoteByCode('${n.code}')" class="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold transition">
+                                    GET {code}
+                                </button>
+                                <button onclick="apiDeleteNote('${n.code}')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold transition">
+                                    DELETE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Glossary Logic
+        let selectedGlossaryCat = 'TOUS';
+
+        function renderGlossaryCategories() {
+            const cats = ['TOUS', ...new Set(GLOSSARY_DATA.map(item => item.category))];
+            document.getElementById('glossaryCategories').innerHTML = cats.map(c => {
+                const active = c === selectedGlossaryCat;
+                return `
+                    <button onclick="selectGlossaryCat('${escapeHtml(c)}')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition border ${active ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}">
+                        ${escapeHtml(c)}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectGlossaryCat(cat) {
+            selectedGlossaryCat = cat;
+            renderGlossaryCategories();
+            renderGlossary();
+        }
+
+        function renderGlossary() {
+            const query = (document.getElementById('glossarySearch').value || '').toLowerCase();
+            const filtered = GLOSSARY_DATA.filter(item => {
+                const matchCat = selectedGlossaryCat === 'TOUS' || item.category === selectedGlossaryCat;
+                const matchText = item.term.toLowerCase().includes(query) ||
+                                  item.shortRole.toLowerCase().includes(query) ||
+                                  item.explanation.toLowerCase().includes(query);
+                return matchCat && matchText;
+            });
+
+            document.getElementById('glossaryCountBadge').textContent = GLOSSARY_DATA.length;
+            const grid = document.getElementById('glossaryGrid');
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center text-xs text-slate-500">Aucun terme trouvé pour "${escapeHtml(query)}".</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(item => `
+                <article id="card-${item.id}" class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs hover:shadow-md transition flex flex-col justify-between animate-fade-up">
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${item.badgeColor}">${escapeHtml(item.category)}</span>
+                        </div>
+                        <h3 class="text-sm font-extrabold text-slate-900 mono mb-1">${escapeHtml(item.term)}</h3>
+                        <p class="text-xs font-semibold text-indigo-700 mb-2">${escapeHtml(item.shortRole)}</p>
+                        <p class="text-xs text-slate-600 leading-relaxed mb-3">${escapeHtml(item.explanation)}</p>
+                    </div>
+                    <pre class="bg-slate-900 text-sky-300 rounded-xl p-2.5 mono text-[10.5px] overflow-x-auto leading-relaxed">${escapeHtml(item.code)}</pre>
+                </article>
+            `).join('');
+        }
+
+        function renderPitfalls() {
+            document.getElementById('pitfallsGrid').innerHTML = PITFALLS_DATA.map(p => `
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col gap-2.5">
+                    <h3 class="text-sm font-extrabold text-slate-900">${escapeHtml(p.title)}</h3>
+                    <div class="bg-rose-50 border border-rose-200/80 rounded-xl p-3 text-xs text-rose-900">
+                        <strong class="block text-[11px] uppercase tracking-wider text-rose-700 mb-0.5">❌ Le Problème :</strong>
+                        ${escapeHtml(p.problem)}
+                    </div>
+                    <div class="bg-emerald-50 border border-emerald-200/80 rounded-xl p-3 text-xs text-emerald-900">
+                        <strong class="block text-[11px] uppercase tracking-wider text-emerald-700 mb-0.5">✅ La Solution Appliquée :</strong>
+                        ${escapeHtml(p.solution)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        /* =====================================================================
+         * 8. NAVIGATION & UTILITIES
+         * ===================================================================== */
+        function switchTab(tabName) {
+            ['simulator', 'glossary', 'pitfalls'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tabName);
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === tabName) {
+                    btn.className = 'px-3.5 py-2 rounded-lg text-xs font-bold transition bg-white text-indigo-700 shadow-xs';
+                } else {
+                    btn.className = 'px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900';
+                }
+            });
+        }
+
+        // Clicking a pipeline node jumps straight to its glossary explanation inside the banner
+        function openQuickTerm(termId) {
+            const item = GLOSSARY_DATA.find(g => g.id === termId);
+            if (!item) return;
+            document.getElementById('actionExplainTitle').textContent = `Définition : ${item.term} — ${item.shortRole}`;
+            document.getElementById('actionExplainText').textContent = item.explanation;
+            showToast(`Explication affichée pour ${item.term}`, 'bg-indigo-400');
+        }
+
+        function copyLastJson() {
+            const ta = document.createElement('textarea');
+            ta.value = lastJsonString || '{}';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('JSON HttpResponse copié !');
+        }
+
+        // Initialization on page load
+        window.onload = function () {
+            renderGlossaryCategories();
+            renderGlossary();
+            renderPitfalls();
+            addLog('INFO', 'Application Spring Boot "Note" démarrée sur le port 8082 (H2 + Redis Ready).');
+            addLog('INFO', 'DatabaseInitializer (CommandLineRunner) -> 3 notes initiales insérées dans H2.');
+            apiGetAllNotes();
+
+            // Live 1-second timer to update Redis TTL countdown badges
+            setInterval(renderRedisKeys, 1000);
+        };
+    </script>
+</body>
+</html>
